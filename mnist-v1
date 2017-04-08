@@ -1,0 +1,106 @@
+"""A very simple MNIST classifier.
+See extensive documentation at
+https://www.tensorflow.org/get_started/mnist/beginners
+"""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+import argparse
+import sys
+
+import tensorflow as tf
+from tensorflow.examples.tutorials.mnist import input_data
+
+FLAGS = None
+
+
+def init_weights(shape):
+    return tf.Variable(tf.random_normal(shape, stddev=0.01))
+
+
+def xavier(n_input, n_output, uniform=True):
+    if uniform:
+        init_range = tf.sqrt(6.0 / (n_input + n_output))
+        return tf.random_uniform_initializer(-init_range, init_range)
+
+
+def model(X, w, w2, w3, w4, w_o, p_keep_conv, p_keep_hidden):
+    r1 = tf.nn.conv2d(X, w, strides=[1, 1, 1, 1], padding='SAME')
+    r2 = tf.nn.relu(r1)
+    r3 = tf.nn.max_pool(r2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')  # 14x14x1x32
+    r4 = tf.nn.dropout(r3, p_keep_conv)
+
+    r5 = tf.nn.conv2d(r4, w2, strides=[1, 1, 1, 1], padding='SAME')
+    r6 = tf.nn.relu(r5)
+    r7 = tf.nn.max_pool(r6, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')  # 7x7x1x64
+    r8 = tf.nn.dropout(r7, p_keep_conv)
+
+    r9 = tf.nn.conv2d(r8, w3, strides=[1, 1, 1, 1], padding='SAME')
+    r10 = tf.nn.relu(r9)
+    r11 = tf.nn.max_pool(r10, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')  # 4x4x1x128
+    r12 = tf.nn.dropout(r11, p_keep_conv)
+
+    r13 = tf.reshape(r12, [-1, 4 * 4 * 128])  # reshape to (?, 2048)
+
+    y1 = tf.nn.dropout(tf.nn.relu(tf.matmul(r13, w4)), p_keep_hidden)
+    y2 = tf.matmul(y1, w_o)
+
+    return y2
+
+
+def main(_):
+    # Import data
+    mnist = input_data.read_data_sets(FLAGS.data_dir, one_hot=True)
+    trX, trY, teX, teY = mnist.train.images, mnist.train.labels, mnist.test.images, mnist.test.labels
+    tf.set_random_seed(777)
+
+    # Create the model
+    x = tf.placeholder(tf.float32, [None, 784])  # 28 x 28
+    sz = 4 * 4 * 128
+
+    x_reshape = tf.reshape(x, [-1, 28, 28, 1])  # x.reshape(-1, 28, 28, 1)
+    W_conv1 = init_weights([3, 3, 1, 32])  # tf.Variable(tf.random_normal([3, 3, 1, 32], stddev=0.01))
+    W_conv2 = init_weights([3, 3, 32, 64])  # tf.Variable(tf.random_normal([3, 3, 32, 64], stddev=0.01))
+    W_conv3 = init_weights([3, 3, 64, 128])  # tf.Variable(tf.random_normal([3, 3, 64, 128], stddev=0.01))
+    W1 = init_weights([sz, 625])  # tf.get_variable("W1", shape=[sz, 625], initializer=xavier(sz, 625))  # tf.Variable(tf.random_normal([784, 300]))
+    W2 = init_weights([625, 10])  # tf.get_variable("W2", shape=[625, 10], initializer=xavier(625, 10))  # tf.Variable(tf.random_normal([300, 300]))
+
+    p_keep_conv = tf.placeholder("float")
+    p_keep_hidden = tf.placeholder("float")
+
+    y_out = model(x_reshape, W_conv1, W_conv2, W_conv3, W1, W2, p_keep_conv, p_keep_hidden)
+    y_ = tf.placeholder(tf.float32, [None, 10])
+
+    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y_out))
+    train_step = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cost)  # 0.095
+    # train_step = tf.train.AdamOptimizer(learning_rate=0.0007).minimize(cross_entropy)  # 0.157
+
+    sess = tf.InteractiveSession()
+    tf.global_variables_initializer().run()
+    # Train
+
+    batch_size = 128
+
+    for i in range(100):
+        print("batch", i)
+        training_batch = zip(range(0, len(trX), batch_size),
+                             range(batch_size, len(trX) + 1, batch_size))
+
+        for start, end in training_batch:
+            sess.run(train_step, feed_dict={x: trX[start:end], y_: trY[start:end], p_keep_conv: 0.8, p_keep_hidden: 0.5})
+
+
+        # Test trained model
+        correct_prediction = tf.equal(tf.argmax(y_out, 1), tf.argmax(y_, 1))
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        print(sess.run(accuracy,
+                       feed_dict={x: mnist.test.images, y_: mnist.test.labels, p_keep_conv: 1.0, p_keep_hidden: 1.0}))
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_dir', type=str, default='/tmp/tensorflow/mnist/input_data',
+                        help='Directory for storing input data')
+    FLAGS, unparsed = parser.parse_known_args()
+    tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
