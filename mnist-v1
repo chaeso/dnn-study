@@ -1,9 +1,6 @@
 """A very simple MNIST classifier.
 See extensive documentation at
-
-* Tutorial for Expert :  https://www.tensorflow.org/get_started/mnist/pros
-* Paper (Deep Residual Learning for Image Recognition) https://arxiv.org/pdf/1512.03385.pdf
-
+https://www.tensorflow.org/get_started/mnist/beginners
 """
 from __future__ import absolute_import
 from __future__ import division
@@ -18,18 +15,9 @@ from tensorflow.examples.tutorials.mnist import input_data
 FLAGS = None
 
 """
-https://www.tensorflow.org/get_started/mnist/pros
+* Tutorial for Expert :  https://www.tensorflow.org/get_started/mnist/pros
+* Paper (Deep Residual Learning for Image Recognition) https://arxiv.org/pdf/1512.03385.pdf
 """
-
-def init_weights(shape):
-    return tf.Variable(tf.random_normal(shape, stddev=0.01))
-
-
-def xavier(n_input, n_output, uniform=True):
-    if uniform:
-        init_range = tf.sqrt(6.0 / (n_input + n_output))
-        return tf.random_uniform_initializer(-init_range, init_range)
-
 
 def model(X, w, w2, w3, w4, w5, w6, w_o, b1, b2, b3, p_keep_conv, p_keep_hidden):
     r1 = tf.nn.conv2d(X, w, strides=[1, 1, 1, 1], padding='SAME')
@@ -69,17 +57,17 @@ def main(_):
     Z = 5
 
     x_reshape = tf.reshape(x, [-1, 28, 28, 1])  # x.reshape(-1, 28, 28, 1)
-    W_conv1 = tf.get_variable("CW1", shape=[Z, Z, 1, 64], initializer=tf.contrib.layers.xavier_initializer_conv2d(False))
-    W_conv2 = tf.get_variable("CW2", shape=[Z, Z, 64, 128], initializer=tf.contrib.layers.xavier_initializer_conv2d(False))
-    W_conv3 = tf.get_variable("CW3", shape=[Z, Z, 128, 256], initializer=tf.contrib.layers.xavier_initializer_conv2d(False))
-    W1 = tf.get_variable("W1", shape=[sz, 625], initializer=tf.contrib.layers.xavier_initializer(False))
-    W2 = tf.get_variable("W2", shape=[625, 200], initializer=tf.contrib.layers.xavier_initializer(False))
-    W3 = tf.get_variable("W3", shape=[200, 100], initializer=tf.contrib.layers.xavier_initializer(False))
-    W4 = tf.get_variable("W4", shape=[100, 10], initializer=tf.contrib.layers.xavier_initializer(False))
+    W_conv1 = tf.get_variable("CW1", shape=[Z, Z, 1, 32], initializer=tf.contrib.layers.xavier_initializer_conv2d(True))
+    W_conv2 = tf.get_variable("CW2", shape=[Z, Z, 32, 64], initializer=tf.contrib.layers.xavier_initializer_conv2d(True))
+    W_conv3 = tf.get_variable("CW3", shape=[Z, Z, 64, 256], initializer=tf.contrib.layers.xavier_initializer_conv2d(True))
+    W1 = tf.get_variable("W1", shape=[sz, 625], initializer=tf.contrib.layers.xavier_initializer(True))
+    W2 = tf.get_variable("W2", shape=[625, 100], initializer=tf.contrib.layers.xavier_initializer(True))
+    W3 = tf.get_variable("W3", shape=[100, 50], initializer=tf.contrib.layers.xavier_initializer(True))
+    W4 = tf.get_variable("W4", shape=[50, 10], initializer=tf.contrib.layers.xavier_initializer(True))
 
-    b1 = tf.get_variable("b1", shape=[625], initializer=tf.contrib.layers.xavier_initializer(False))
-    b2 = tf.get_variable("b2", shape=[200], initializer=tf.contrib.layers.xavier_initializer(False))
-    b3 = tf.get_variable("b3", shape=[100], initializer=tf.contrib.layers.xavier_initializer(False))
+    b1 = tf.get_variable("b1", shape=[625], initializer=tf.contrib.layers.xavier_initializer(True))
+    b2 = tf.get_variable("b2", shape=[100], initializer=tf.contrib.layers.xavier_initializer(True))
+    b3 = tf.get_variable("b3", shape=[50], initializer=tf.contrib.layers.xavier_initializer(True))
 
     p_keep_conv = tf.placeholder("float")
     p_keep_hidden = tf.placeholder("float")
@@ -89,7 +77,35 @@ def main(_):
 
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y_out))
     #train_step = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cost)  # 0.9855 (batch 2)
-    train_step = tf.train.AdamOptimizer(0.001).minimize(cost)  # 0.9855 (batch 2)
+    train_step = tf.train.AdamOptimizer(0.0005).minimize(cost)  # 0.9855 (batch 2)
+
+    """
+    batch 0
+    0.9448   -> 0.9711 --> 0.9776 (Conv Filter Size 3->4)   -> 0.9863 (Larger Number of Filter) -> 0.9884 (Added bias)
+    batch 1
+    0.9725   -> 0.982
+    batch 2
+    0.9792
+    batch 3
+    0.9823
+    batch 4
+    0.9854
+    batch 5
+    0.9872
+    batch 6
+    0.9887
+    batch 7
+    0.9899
+    batch 8
+    0.9904
+    batch 9
+    0.99         -> 0.9931
+    batch 10
+    0.9909
+    batch 11
+    0.9919
+    batch 12
+    """
 
     sess = tf.InteractiveSession()
     tf.global_variables_initializer().run()
@@ -103,7 +119,7 @@ def main(_):
                              range(batch_size, len(trX) + 1, batch_size))
 
         for start, end in training_batch:
-            sess.run(train_step, feed_dict={x: trX[start:end], y_: trY[start:end], p_keep_conv: 1.0, p_keep_hidden: 0.8})
+            sess.run(train_step, feed_dict={x: trX[start:end], y_: trY[start:end], p_keep_conv: 0.8, p_keep_hidden: 0.8})
 
 
         # Test trained model
@@ -119,3 +135,4 @@ if __name__ == '__main__':
                         help='Directory for storing input data')
     FLAGS, unparsed = parser.parse_known_args()
     tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
+    # max = 0.9952
