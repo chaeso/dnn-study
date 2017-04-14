@@ -19,29 +19,60 @@ FLAGS = None
 * Paper (Deep Residual Learning for Image Recognition) https://arxiv.org/pdf/1512.03385.pdf
 """
 
-def model(X, w, w2, w3, w4, w5, w6, w_o, b1, b2, b3, p_keep_conv, p_keep_hidden):
-    r1 = tf.nn.conv2d(X, w, strides=[1, 1, 1, 1], padding='SAME')
-    r2 = tf.nn.relu(r1)
-    r3 = tf.nn.max_pool(r2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')  # 14x14x1x32
-    r4 = tf.nn.dropout(r3, p_keep_conv)
+MSZ = 5
+S = 128
+SZ = 4 * 4 * S
 
-    r5 = tf.nn.conv2d(r4, w2, strides=[1, 1, 1, 1], padding='SAME')
-    r6 = tf.nn.relu(r5)
-    r7 = tf.nn.max_pool(r6, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')  # 7x7x1x64
-    r8 = tf.nn.dropout(r7, p_keep_conv)
+def model(X, p_keep_conv, p_keep_hidden):
+    with tf.device('/gpu:0'):
+        CW1 = tf.get_variable("CW1", shape=[MSZ, MSZ, 1, S/8],
+                                  initializer=tf.contrib.layers.xavier_initializer_conv2d(True))
+        CW2 = tf.get_variable("CW2", shape=[MSZ, MSZ, S/8, S/4],
+                                  initializer=tf.contrib.layers.xavier_initializer_conv2d(True))
+        CW3 = tf.get_variable("CW3", shape=[MSZ, MSZ, S/4, S/2],
+                                  initializer=tf.contrib.layers.xavier_initializer_conv2d(True))
+        CW4 = tf.get_variable("CW4", shape=[MSZ, MSZ, S/2, S],
+                                  initializer=tf.contrib.layers.xavier_initializer_conv2d(True))
 
-    r9 = tf.nn.conv2d(r8, w3, strides=[1, 1, 1, 1], padding='SAME')
-    r10 = tf.nn.relu(r9)
-    r11 = tf.nn.max_pool(r10, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')  # 4x4x1x128
-    r12 = tf.nn.dropout(r11, p_keep_conv)
+        W1 = tf.get_variable("W1", shape=[SZ, 625], initializer=tf.contrib.layers.xavier_initializer(True))
+        W2 = tf.get_variable("W2", shape=[625, 100], initializer=tf.contrib.layers.xavier_initializer(True))
+        W3 = tf.get_variable("W3", shape=[100, 50], initializer=tf.contrib.layers.xavier_initializer(True))
+        W4 = tf.get_variable("W4", shape=[50, 10], initializer=tf.contrib.layers.xavier_initializer(True))
 
-    r13 = tf.reshape(r12, [-1, 4 * 4 * 256])  # reshape to (?, 2048)
+        b1 = tf.Variable(tf.random_normal([625]))
+        b2 = tf.Variable(tf.random_normal([100]))
+        b3 = tf.Variable(tf.random_normal([50]))
 
-    y1 = tf.nn.dropout(tf.nn.relu(tf.matmul(r13, w4)+b1), p_keep_hidden)
-    y2 = tf.nn.dropout(tf.nn.relu(tf.matmul(y1, w5)+b2), p_keep_hidden)
-    y3 = tf.nn.dropout(tf.nn.relu(tf.matmul(y2, w6)+b3), p_keep_hidden)
+        #b1 = tf.get_variable("b1", shape=[625], initializer=tf.contrib.layers.xavier_initializer(True))
+        ##b2 = tf.get_variable("b2", shape=[100], initializer=tf.contrib.layers.xavier_initializer(True))
+        #b3 = tf.get_variable("b3", shape=[50], initializer=tf.contrib.layers.xavier_initializer(True))
 
-    return tf.matmul(y3, w_o)
+        L1 = tf.nn.conv2d(X, CW1, strides=[1, 1, 1, 1], padding='SAME')
+        L1 = tf.nn.relu(L1)
+        #L1 = tf.nn.max_pool(L1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')  # 14x14x1x32
+        L1 = tf.nn.dropout(L1, p_keep_conv)
+
+        L2 = tf.nn.conv2d(L1, CW2, strides=[1, 1, 1, 1], padding='SAME')
+        L2 = tf.nn.relu(L2)
+        L2 = tf.nn.max_pool(L2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')  # 7x7x1x64
+        L2 = tf.nn.dropout(L2, p_keep_conv)
+
+        L3 = tf.nn.conv2d(L2, CW3, strides=[1, 1, 1, 1], padding='SAME')
+        L3 = tf.nn.relu(L3)
+        L3 = tf.nn.max_pool(L3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')  # 4x4x1x128
+        L3 = tf.nn.dropout(L3, p_keep_conv)
+
+        L4 = tf.nn.conv2d(L3, CW4, strides=[1, 1, 1, 1], padding='SAME')
+        L4 = tf.nn.relu(L4)
+        L4 = tf.nn.max_pool(L4, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')  # 4x4x1x128
+        L4 = tf.nn.dropout(L4, p_keep_conv)
+
+        flatten = tf.reshape(L4, [-1, 4 * 4 * 128])  # reshape to (?, 2048)
+        L5 = tf.nn.dropout(tf.nn.relu(tf.matmul(flatten, W1)+b1), p_keep_hidden)
+        L6 = tf.nn.dropout(tf.nn.relu(tf.matmul(L5, W2)+b2), p_keep_hidden)
+        L7 = tf.nn.dropout(tf.nn.relu(tf.matmul(L6, W3)+b3), p_keep_hidden)
+
+        return tf.matmul(L7, W4)
 
 
 def main(_):
@@ -50,76 +81,34 @@ def main(_):
     trX, trY, teX, teY = mnist.train.images, mnist.train.labels, mnist.test.images, mnist.test.labels
     tf.set_random_seed(777)
 
-    # Create the model
-    x = tf.placeholder(tf.float32, [None, 784])  # 28 x 28
-    sz = 4 * 4 * 256
+    with tf.device('/gpu:0'):
+        # Create the model
+        x = tf.placeholder(tf.float32, [None, 784])  # 28 x 28
+        x_reshape = tf.reshape(x, [-1, 28, 28, 1])  # x.reshape(-1, 28, 28, 1)
 
-    Z = 5
+        p_keep_conv = tf.placeholder("float")
+        p_keep_hidden = tf.placeholder("float")
 
-    x_reshape = tf.reshape(x, [-1, 28, 28, 1])  # x.reshape(-1, 28, 28, 1)
-    W_conv1 = tf.get_variable("CW1", shape=[Z, Z, 1, 32], initializer=tf.contrib.layers.xavier_initializer_conv2d(True))
-    W_conv2 = tf.get_variable("CW2", shape=[Z, Z, 32, 64], initializer=tf.contrib.layers.xavier_initializer_conv2d(True))
-    W_conv3 = tf.get_variable("CW3", shape=[Z, Z, 64, 256], initializer=tf.contrib.layers.xavier_initializer_conv2d(True))
-    W1 = tf.get_variable("W1", shape=[sz, 625], initializer=tf.contrib.layers.xavier_initializer(True))
-    W2 = tf.get_variable("W2", shape=[625, 100], initializer=tf.contrib.layers.xavier_initializer(True))
-    W3 = tf.get_variable("W3", shape=[100, 50], initializer=tf.contrib.layers.xavier_initializer(True))
-    W4 = tf.get_variable("W4", shape=[50, 10], initializer=tf.contrib.layers.xavier_initializer(True))
+        y_out = model(x_reshape, p_keep_conv, p_keep_hidden)
+        y_ = tf.placeholder(tf.float32, [None, 10])
 
-    b1 = tf.get_variable("b1", shape=[625], initializer=tf.contrib.layers.xavier_initializer(True))
-    b2 = tf.get_variable("b2", shape=[100], initializer=tf.contrib.layers.xavier_initializer(True))
-    b3 = tf.get_variable("b3", shape=[50], initializer=tf.contrib.layers.xavier_initializer(True))
-
-    p_keep_conv = tf.placeholder("float")
-    p_keep_hidden = tf.placeholder("float")
-
-    y_out = model(x_reshape, W_conv1, W_conv2, W_conv3, W1, W2, W3, W4, b1, b2, b3, p_keep_conv, p_keep_hidden)
-    y_ = tf.placeholder(tf.float32, [None, 10])
-
-    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y_out))
-    #train_step = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cost)  # 0.9855 (batch 2)
-    train_step = tf.train.AdamOptimizer(0.0005).minimize(cost)  # 0.9855 (batch 2)
-
-    """
-    batch 0
-    0.9448   -> 0.9711 --> 0.9776 (Conv Filter Size 3->4)   -> 0.9863 (Larger Number of Filter) -> 0.9884 (Added bias)
-    batch 1
-    0.9725   -> 0.982
-    batch 2
-    0.9792
-    batch 3
-    0.9823
-    batch 4
-    0.9854
-    batch 5
-    0.9872
-    batch 6
-    0.9887
-    batch 7
-    0.9899
-    batch 8
-    0.9904
-    batch 9
-    0.99         -> 0.9931
-    batch 10
-    0.9909
-    batch 11
-    0.9919
-    batch 12
-    """
+        cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y_out))
+        #train_step = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cost)  # 0.9855 (batch 2)
+        train_step = tf.train.AdamOptimizer(0.0005).minimize(cost)  # 0.9855 (batch 2)
 
     sess = tf.InteractiveSession()
     tf.global_variables_initializer().run()
     # Train
 
-    batch_size = 128
+    batch_size = 256
 
-    for i in range(100):
+    for i in range(200):
         print("batch", i)
         training_batch = zip(range(0, len(trX), batch_size),
                              range(batch_size, len(trX) + 1, batch_size))
 
         for start, end in training_batch:
-            sess.run(train_step, feed_dict={x: trX[start:end], y_: trY[start:end], p_keep_conv: 0.8, p_keep_hidden: 0.8})
+            sess.run(train_step, feed_dict={x: trX[start:end], y_: trY[start:end], p_keep_conv: 0.8, p_keep_hidden: 0.5})
 
 
         # Test trained model
@@ -130,8 +119,9 @@ def main(_):
 
 
 if __name__ == '__main__':
+    print("hahah start1")
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_dir', type=str, default='/tmp/tensorflow/mnist/input_data',
+    parser.add_argument('--data_dir', type=str, default='./tensorflow/mnist/input_data',
                         help='Directory for storing input data')
     FLAGS, unparsed = parser.parse_known_args()
     tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
