@@ -2,6 +2,7 @@
 # https://www.tensorflow.org/tutorials/layers
 import tensorflow as tf
 import numpy as np
+import os
 
 import loader as input_data
 from tensorflow.python.framework import ops
@@ -17,10 +18,14 @@ mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
 # more information about the mnist dataset
 
 # hyper parameters
-learning_rate = 0.0015
-training_epochs = 100  #
-batch_size = 50
-NUM_MODELS = 7
+learning_rate = 0.001
+training_epochs = 100
+batch_size = 100
+NUM_MODELS = 3
+CP_PATH = './model2.ckpt'
+
+#20 => 0.9951
+
 
 class Model:
 
@@ -44,41 +49,58 @@ class Model:
             self.Y = tf.placeholder(tf.float32, [None, 10])
 
             # Convolutional Layer #1
-            conv1 = tf.layers.conv2d(inputs=X_img, filters=32, kernel_size=[mask_size, mask_size],
-                                     padding="SAME", activation=None)
-
+            sz_filter = 20
+            conv1 = tf.layers.conv2d(inputs=X_img, filters=sz_filter, kernel_size=[mask_size, mask_size], padding="SAME", activation=None)
             conv1 = tf.nn.elu(tf.layers.batch_normalization(conv1))
+
+            conv1 = tf.layers.conv2d(inputs=conv1, filters=sz_filter, kernel_size=[mask_size, mask_size], padding="SAME", activation=None)
+            conv1 = tf.nn.elu(tf.layers.batch_normalization(conv1))
+
             # Pooling Layer #1
             pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2],
                                             padding="SAME", strides=2)
 
             # Convolutional Layer #2 and Pooling Layer #2
-            conv2 = tf.layers.conv2d(inputs=pool1, filters=64, kernel_size=[mask_size, mask_size],
-                                     padding="SAME", activation=None)
+            conv2 = tf.layers.conv2d(inputs=pool1, filters=sz_filter*3, kernel_size=[mask_size, mask_size], padding="SAME", activation=None)
             conv2 = tf.nn.elu(tf.layers.batch_normalization(conv2))
+
+            conv2 = tf.layers.conv2d(inputs=conv2, filters=sz_filter*3, kernel_size=[mask_size, mask_size], padding="SAME", activation=None)
+            conv2 = tf.nn.elu(tf.layers.batch_normalization(conv2))
+
             pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2],
                                             padding="SAME", strides=2)
 
             # Convolutional Layer #2 and Pooling Layer #2
-            conv3 = tf.layers.conv2d(inputs=pool2, filters=128, kernel_size=[mask_size, mask_size],
-                                     padding="same", activation=None)
+            conv3 = tf.layers.conv2d(inputs=pool2, filters=sz_filter*5, kernel_size=[mask_size, mask_size], padding="same", activation=None)
+            conv3 = tf.nn.elu(tf.layers.batch_normalization(conv3))
+
+            conv3 = tf.layers.conv2d(inputs=conv3, filters=sz_filter*5, kernel_size=[mask_size, mask_size], padding="same", activation=None)
             conv3 = tf.nn.elu(tf.layers.batch_normalization(conv3))
             pool3 = tf.layers.max_pooling2d(inputs=conv3, pool_size=[2, 2],
                                             padding="same", strides=2)
 
+
+            # Convolutional Layer #3 and Pooling Layer #2
+            conv4 = tf.layers.conv2d(inputs=pool3, filters=sz_filter * 10, kernel_size=[mask_size, mask_size],
+                                     padding="same", activation=None)
+            conv4 = tf.nn.elu(tf.layers.batch_normalization(conv4))
+
+            conv4 = tf.layers.conv2d(inputs=conv4, filters=sz_filter * 10, kernel_size=[mask_size, mask_size],
+                                     padding="same", activation=None)
+            conv4 = tf.nn.elu(tf.layers.batch_normalization(conv4))
+            pool4 = tf.layers.max_pooling2d(inputs=conv4, pool_size=[2, 2],
+                                            padding="same", strides=2)
+
             # Dense Layer with Relu
-            flat = tf.reshape(pool3, [-1, 128 * 4 * 4])
+            flat = tf.reshape(pool4, [-1, sz_filter * 10 * 2 * 2])
             dense4 = tf.layers.dense(inputs=flat, units=625, activation=None)
             dense4 = tf.nn.elu(tf.layers.batch_normalization(dense4))
 
             dense5 = tf.layers.dense(inputs=dense4, units=625, activation=None)
             dense5 = tf.nn.elu(tf.layers.batch_normalization(dense5))
 
-            dense6 = tf.layers.dense(inputs=dense5, units=625, activation=None)
-            dense6 = tf.nn.elu(tf.layers.batch_normalization(dense6))
-
             # Logits (no activation) Layer: L5 Final FC 625 inputs -> 10 outputs
-            self.logits = tf.layers.dense(inputs=dense6, units=10)
+            self.logits = tf.layers.dense(inputs=dense5, units=10)
 
         # define cost/loss & optimizer
         self.cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
@@ -104,19 +126,37 @@ class Model:
             self.X: x_data, self.Y: y_data, self.training: training})
 
 # initialize
-sess = tf.Session()  #config=tf.ConfigProto(log_device_placement=True))
+sess = tf.Session()
 
 models = []
 num_models = NUM_MODELS
 for m in range(num_models):
-    models.append(Model(sess, "model" + str(m), mask_size=5))
+    models.append(Model(sess, "model" + str(m), mask_size=3))
+
+last_epoch = tf.Variable(0, name='last_epoch')
 
 sess.run(tf.global_variables_initializer())
 
+saver = tf.train.Saver()
+checkpoint = tf.train.get_checkpoint_state(".")
+
+if checkpoint and checkpoint.model_checkpoint_path:
+    try:
+        saver.restore(sess, CP_PATH)
+        print("Successfully loaded:", checkpoint.model_checkpoint_path)
+    except Exception as e:
+        print(str(e))
+        print("Error on loading old network weights")
+
+
 print('Learning Started!')
 
+start_from = sess.run(last_epoch)
+print("start_from, ", start_from)
+
 # train my model
-for epoch in range(training_epochs):
+for epoch in range(start_from, training_epochs):
+    print("epoch = ", epoch)
     avg_cost_list = np.zeros(len(models))
     total_batch = int(mnist.train.num_examples / batch_size)
     for i in range(total_batch):
@@ -130,6 +170,8 @@ for epoch in range(training_epochs):
             avg_cost_list[m_idx] += c / total_batch
 
     print('Epoch:', '%04d' % (epoch + 1), 'cost =', avg_cost_list)
+    print(sess.run(last_epoch.assign(epoch + 1)))
+    saver.save(sess, CP_PATH)
 
 print('Learning Finished!')
 
