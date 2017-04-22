@@ -19,12 +19,13 @@ mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
 
 # hyper parameters
 learning_rate = 0.001
-training_epochs = 100
+training_epochs = 32
 batch_size = 100
-NUM_MODELS = 3
-CP_PATH = './model2.ckpt'
+NUM_MODELS = 5
+CP_PATH = './trained.ckpt'
 
-#20 => 0.9951
+#20 => 0.9951 (with 3 models)
+#20 => ?
 
 
 class Model:
