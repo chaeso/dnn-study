@@ -1,1 +1,3 @@
-# dnn-study
+# Test
+
+`python mnist5.py`
