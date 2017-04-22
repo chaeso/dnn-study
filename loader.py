@@ -166,7 +166,7 @@ class DataSet(object):
   def next_distorted_batch(self, batch_size, fake_data=False):
     images, labels = self.next_batch(batch_size, fake_data)
  
-    if random.random() < 0.7:
+    if random.random() < 0.5:
         return images, labels
 
     # such as randomized rotations, crops, and image manipulations
