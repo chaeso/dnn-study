@@ -22,7 +22,7 @@ learning_rate = 0.001
 training_epochs = 32
 batch_size = 100
 NUM_MODELS = 5
-CP_PATH = './trained.ckpt'
+CP_PATH = './model3.ckpt'
 
 #20 => 0.9951 (with 3 models)
 #20 => ?
