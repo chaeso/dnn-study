@@ -165,14 +165,17 @@ class DataSet(object):
 
   def next_distorted_batch(self, batch_size, fake_data=False):
     images, labels = self.next_batch(batch_size, fake_data)
+ 
+    if random.random() < 0.7:
+        return images, labels
 
     # such as randomized rotations, crops, and image manipulations
     def filter(img):
-      img = transform.rotate(img, (random.random()-0.5)*20, clip=True)
+      img = transform.rotate(img, int((random.random()-0.5)*5)*5, clip=True)
       return img #return ndi.gaussian_filter(img, blur_ratio)
 
     def add_noise(img):
-      return img + (numpy.random.poisson(lam=5, size=img.shape) - 10) / 255
+      return img #img + (numpy.random.poisson(lam=15, size=img.shape) - 10) / 255
 
     f1 = [numpy.reshape(add_noise(filter(numpy.reshape(img, (28, 28)))), 28*28) for img in images]
     distorted_images = numpy.asarray(f1)
