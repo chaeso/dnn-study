@@ -1,3 +1,3 @@
 # Test
 
-`python mnist5.py`
+`python3 mnist5.py`
